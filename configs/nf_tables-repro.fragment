@@ -1,0 +1,22 @@
+# Kconfig fragment for the CVE-2024-1086 / nf_tables reproducer.
+#
+# Applied on top of the kernel's own `x86_64_defconfig` by
+# `configs/generate-config.sh` (via `scripts/kconfig/merge_config.sh`).
+# Keeping only the options that matter here — instead of hand-editing and
+# tracking a full 5000+ line `.config` — makes the security-relevant intent
+# auditable and reproducible from a clean clone.
+#
+# Requirements (see README.md "Configuration requirements"): enable nf_tables
+# and its netlink interface, user and network namespaces, and leave heap-init
+# hardening disabled. NFNETLINK is the interface name; there is no
+# CONFIG_NFNETLINK Kconfig symbol.
+#
+# User namespaces must also be permitted at runtime (kernel.unprivileged_userns_clone=1
+# where that sysctl exists). On kernels newer than v6.4, heap-init hardening
+# defeats the UAF/double-free the PoC relies on.
+
+CONFIG_NF_TABLES=y
+CONFIG_NETFILTER_NETLINK=y
+CONFIG_USER_NS=y
+CONFIG_NET_NS=y
+# CONFIG_INIT_ON_ALLOC_DEFAULT_ON is not set
