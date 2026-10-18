@@ -8,8 +8,14 @@ Linux **v6.6.14** kernel booted in an isolated QEMU VM.
 - The kernel is a **git submodule** at `linux/`, pinned to tag `v6.6.14`
   (stable tree: `https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git`).
   Only the pointer is tracked, not the kernel sources.
-- `.gitmodules` sets `shallow = true`.
-- Build output goes out-of-tree to `build/` (gitignored); the submodule stays clean.
+- The reproducer is a **git submodule** at `poc/CVE-2024-1086`, pointing to
+  [Notselwyn/CVE-2024-1086](https://github.com/Notselwyn/CVE-2024-1086)
+  — a universal local-privilege-escalation PoC for the nf_tables `nft_set_elem`
+  double-free/UAF ([CVE-2024-1086](https://nvd.nist.gov/vuln/detail/CVE-2024-1086)),
+  affecting kernels v5.14–v6.6 (patched in v6.6.15, among others). v6.6.14 is
+  the last vulnerable point release on that branch, which is why it was chosen here.
+- `.gitmodules` sets `shallow = true` for both submodules.
+- Build output goes out-of-tree to `build/` (gitignored); the submodules stay clean.
 - Kernel modifications are kept as patches in `patches/`, never committed in the submodule.
 
 ### Layout
@@ -17,9 +23,9 @@ Linux **v6.6.14** kernel booted in an isolated QEMU VM.
 | Path | Purpose |
 |------|---------|
 | `linux/` | Kernel submodule @ v6.6.14 |
+| `poc/CVE-2024-1086/` | Exploit/reproducer submodule for CVE-2024-1086 |
 | `configs/` | Tracked kernel `.config` files |
 | `qemu/` | VM launch and rootfs/initramfs scripts |
-| `poc/` | Reproducer code |
 | `patches/` | Optional debug patches for the kernel |
 | `notes/` | Progress log and findings |
 | `build/` | Build output (ignored) |
@@ -38,6 +44,30 @@ If the shallow checkout lacks the tag:
 ```bash
 git -C linux fetch --depth 1 origin tag v6.6.14 && git -C linux checkout v6.6.14
 ```
+
+## Reproducer (CVE-2024-1086)
+
+`poc/CVE-2024-1086` requires `musl-gcc` to build (the Makefile links statically
+against musl to avoid glibc ABI issues under QEMU/exotic rootfs):
+
+```bash
+cd poc/CVE-2024-1086
+make        # produces ./exploit
+```
+
+Key requirements enforced inside the VM's kconfig/sysctl (should already hold
+for a vanilla v6.6.14 build enabling the options below):
+- `CONFIG_USER_NS=y` and unprivileged user namespaces allowed
+  (`sysctl kernel.unprivileged_userns_clone=1`)
+- `CONFIG_NF_TABLES=y`
+- Avoid `CONFIG_INIT_ON_ALLOC_DEFAULT_ON=y` — it defeats this exploit on v6.4+.
+
+Copy `poc/CVE-2024-1086/exploit` into the initramfs/rootfs and run it as an
+unprivileged user inside the VM; a successful run yields a root shell and
+deliberately panics the kernel afterwards (left unmitigated upstream to make
+exploitation attempts noisy). See `poc/CVE-2024-1086/src/config.h` for tunables
+(PTE/skb spray amounts, scanned physical memory range, etc.) and the project's
+[write-up](https://pwning.tech/nftables/) for background.
 
 ## Build
 
