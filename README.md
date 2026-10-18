@@ -15,7 +15,12 @@ Linux **v6.6.14** kernel booted in an isolated QEMU VM.
   affecting kernels v5.14–v6.6 (patched in v6.6.15, among others). v6.6.14 is
   the last vulnerable point release on that branch, which is why it was chosen here.
 - `.gitmodules` sets `shallow = true` for both submodules.
-- Build output goes out-of-tree to `build/` (gitignored); the submodules stay clean.
+- Build output, **including `.config`**, goes out-of-tree to `build/` (gitignored); the
+  submodules stay clean. A submodule can only be pinned as a whole (one commit SHA) —
+  git has no way to track individual files inside it from the parent repo — so the
+  kernel's own `.gitignore` would otherwise swallow `.config` as an untracked file
+  invisible to both repos. Instead, the config is tracked in `configs/` here and
+  copied into `build/.config` before building.
 - Kernel modifications are kept as patches in `patches/`, never committed in the submodule.
 
 ### Layout
@@ -24,7 +29,7 @@ Linux **v6.6.14** kernel booted in an isolated QEMU VM.
 |------|---------|
 | `linux/` | Kernel submodule @ v6.6.14 |
 | `poc/CVE-2024-1086/` | Exploit/reproducer submodule for CVE-2024-1086 |
-| `configs/` | Tracked kernel `.config` files |
+| `configs/` | Tracked kernel `.config` files (e.g. `linux-v6.6.14.config`) |
 | `qemu/` | VM launch and rootfs/initramfs scripts |
 | `patches/` | Optional debug patches for the kernel |
 | `notes/` | Progress log and findings |
@@ -71,13 +76,29 @@ exploitation attempts noisy). See `poc/CVE-2024-1086/src/config.h` for tunables
 
 ## Build
 
+The tracked config at `configs/linux-v6.6.14.config` already enables what the
+CVE-2024-1086 reproducer needs: `CONFIG_NF_TABLES=y`, `CONFIG_USER_NS=y`,
+`CONFIG_NET_NS=y`, `CONFIG_KALLSYMS=y`, `CONFIG_SERIAL_8250_CONSOLE=y`,
+`CONFIG_BLK_DEV_INITRD=y`, and leaves `CONFIG_INIT_ON_ALLOC_DEFAULT_ON=n`
+(enabling it defeats the exploit on v6.4+). `CONFIG_KASAN` is **not** enabled
+and `CONFIG_DEBUG_INFO` is set to `NONE` — this matches a vanilla/distro-like
+build; enable KASAN separately only if you want to confirm the underlying bug
+with sanitizer instrumentation rather than exploit it (the two goals can
+conflict, since KASAN changes allocator/reuse behavior the exploit relies on).
+
 ```bash
-make -C linux O=$PWD/build defconfig
-# Enable (e.g. via `make -C linux O=$PWD/build menuconfig`), then save to configs/:
-#   CONFIG_NF_TABLES=y CONFIG_NETFILTER=y CONFIG_USER_NS=y CONFIG_NET_NS=y
-#   CONFIG_DEBUG_INFO_DWARF5=y CONFIG_KASAN=y CONFIG_KALLSYMS=y
-#   CONFIG_SERIAL_8250_CONSOLE=y CONFIG_BLK_DEV_INITRD=y
-make -C linux O=$PWD/build -j"$(nproc)"
+qemu/build-kernel.sh
+# equivalent to:
+#   mkdir -p build && cp configs/linux-v6.6.14.config build/.config
+#   make -C linux O=$PWD/build olddefconfig
+#   make -C linux O=$PWD/build -j"$(nproc)"
+```
+
+To tweak the config, edit it out-of-tree and resync it back into the repo:
+
+```bash
+make -C linux O=$PWD/build menuconfig
+cp build/.config configs/linux-v6.6.14.config   # persist your changes
 ```
 
 ## Run
