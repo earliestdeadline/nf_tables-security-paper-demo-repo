@@ -1,26 +1,29 @@
-# nf_tables bug reproduction (Linux v6.6.14)
+# nf_tables bug reproduction (Linux v6.2.16)
 
 Workspace for reproducing an nf_tables bug on a vanilla, self-compiled
-Linux **v6.6.14** kernel booted in an isolated QEMU VM.
+Linux **v6.2.16** kernel booted in an isolated QEMU VM.
 
 ## Repository configuration
 
-- The kernel is a **git submodule** at `linux/`, pinned to tag `v6.6.14`
+- The kernel is a **git submodule** at `linux/`, pinned to tag `v6.2.16`
   (stable tree: `https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git`).
   Only the pointer is tracked, not the kernel sources.
 - The reproducer is a **git submodule** at `poc/CVE-2024-1086`, pointing to
   [Notselwyn/CVE-2024-1086](https://github.com/Notselwyn/CVE-2024-1086)
   — a universal local-privilege-escalation PoC for the nf_tables `nft_set_elem`
   double-free/UAF ([CVE-2024-1086](https://nvd.nist.gov/vuln/detail/CVE-2024-1086)),
-  affecting kernels v5.14–v6.6 (patched in v6.6.15, among others). v6.6.14 is
-  the last vulnerable point release on that branch, which is why it was chosen here.
+  affecting kernels v5.14–v6.6 (patched in v6.6.15, among others). The v6.2
+  series predates the stable-branch fix and is used here as an older vulnerable target.
 - `.gitmodules` sets `shallow = true` for both submodules.
-- Build output, **including `.config`**, goes out-of-tree to `build/` (gitignored); the
-  submodules stay clean. A submodule can only be pinned as a whole (one commit SHA) —
+- Linux 6.2 is end-of-life and this target is intentionally vulnerable; use it
+  only in the isolated QEMU lab, not as a general-purpose kernel.
+- Build output, **including `.config`**, goes out-of-tree to a gitignored build
+  directory; the submodules stay clean. The active `build-6.2.16/` output
+  keeps the older `build/` artifacts separate. A submodule can only be pinned as a whole (one commit SHA) —
   git has no way to track individual files inside it from the parent repo — so the
   kernel's own `.gitignore` would otherwise swallow `.config` as an untracked file
   invisible to both repos. Instead of hand-editing and tracking a full `.config`,
-  `build/.config` is *generated* by `configs/generate-config.sh` from the kernel's
+  the build directory's `.config` is *generated* by `configs/generate-config.sh` from the kernel's
   own stock `x86_64_defconfig` plus the small, documented options fragment at
   `configs/nf_tables-repro.fragment` — see [Build](#build).
 - Kernel modifications are kept as patches in `patches/`, never committed in the submodule.
@@ -29,18 +32,18 @@ Linux **v6.6.14** kernel booted in an isolated QEMU VM.
 
 | Path | Purpose |
 |------|---------|
-| `linux/` | Kernel submodule @ v6.6.14 |
+| `linux/` | Kernel submodule @ v6.2.16 |
 | `poc/CVE-2024-1086/` | Exploit/reproducer submodule for CVE-2024-1086 |
 | `poc/build-exploit.sh` | Builds the exploit, preflight-checking for `musl-gcc` |
 | `configs/nf_tables-repro.fragment` | Minimal, documented kconfig fragment (source of truth) |
-| `configs/generate-config.sh` | Generates `build/.config` from a stock defconfig + the fragment |
+| `configs/generate-config.sh` | Generates `build-6.2.16/.config` from a stock defconfig + the fragment |
 | `configs/verify-config.sh` | Checks a `.config` for the required options |
 | `configs/detect-cc.sh` | Auto-selects a GCC version compatible with this kernel tree |
-| `configs/linux-v6.6.14.config` | Legacy frozen full `.config` (fallback/reference only) |
+| `configs/linux-v6.6.14.config` | Historical frozen config for the previous 6.6.14 target |
 | `qemu/` | VM launch and rootfs/initramfs scripts |
 | `patches/` | Optional debug patches for the kernel |
 | `notes/` | Progress log and findings |
-| `build/` | Build output (ignored) |
+| `build-6.2.16/` | Current kernel and initramfs output (ignored; override with `BUILD_DIR`) |
 
 ## Getting started
 
@@ -48,13 +51,13 @@ Linux **v6.6.14** kernel booted in an isolated QEMU VM.
 git clone --recurse-submodules --shallow-submodules <this-repo>
 # or, in an existing clone:
 git submodule update --init --depth 1
-git -C linux describe --tags   # expect v6.6.14
+git -C linux describe --tags   # expect v6.2.16
 ```
 
 If the shallow checkout lacks the tag:
 
 ```bash
-git -C linux fetch --depth 1 origin tag v6.6.14 && git -C linux checkout v6.6.14
+git -C linux fetch --depth 1 origin tag v6.2.16 && git -C linux checkout v6.2.16
 ```
 
 ## Reproducer (CVE-2024-1086)
@@ -106,8 +109,9 @@ These requirements are captured, with rationale, in
 
 ### Generating the config
 
-From a clean clone, `configs/generate-config.sh` builds `build/.config` from
-scratch: it starts from the kernel's own stock `x86_64_defconfig`, merges in
+From a clean clone, `configs/generate-config.sh` builds `.config` in its
+selected build directory from scratch: it starts from the kernel's own stock
+`x86_64_defconfig`, merges in
 `configs/nf_tables-repro.fragment` with `scripts/kconfig/merge_config.sh`, runs
 `olddefconfig` to resolve the rest, and then checks the result with
 `configs/verify-config.sh`:
@@ -115,10 +119,10 @@ scratch: it starts from the kernel's own stock `x86_64_defconfig`, merges in
 ```bash
 configs/generate-config.sh
 # equivalent to:
-#   make -C linux O=$PWD/build x86_64_defconfig
-#   linux/scripts/kconfig/merge_config.sh -O build -m build/.config configs/nf_tables-repro.fragment
-#   make -C linux O=$PWD/build olddefconfig
-#   configs/verify-config.sh build/.config
+#   make -C linux O=$PWD/build-6.2.16 x86_64_defconfig
+#   linux/scripts/kconfig/merge_config.sh -O build-6.2.16 -m build-6.2.16/.config configs/nf_tables-repro.fragment
+#   make -C linux O=$PWD/build-6.2.16 olddefconfig
+#   configs/verify-config.sh build-6.2.16/.config
 ```
 
 `qemu/build-kernel.sh` calls this generator and then builds the kernel:
@@ -136,7 +140,7 @@ since KASAN changes allocator/reuse behavior the exploit relies on).
 To tweak the config interactively instead:
 
 ```bash
-make -C linux O=$PWD/build menuconfig
+make -C linux O=$PWD/build-6.2.16 menuconfig
 ```
 
 ### Compiler compatibility
@@ -144,7 +148,7 @@ make -C linux O=$PWD/build menuconfig
 `configs/generate-config.sh` and `qemu/build-kernel.sh` both source
 `configs/detect-cc.sh`, which auto-selects a compatible `gcc` (preferring
 `gcc-13`/`gcc-12`/`gcc-11`/`gcc-10` over a bare `gcc`/`cc` that resolves to
-GCC 15+). This v6.6 kernel tree fails to build with GCC 15+ because
+GCC 15+). Older kernel trees can fail to build with GCC 15+ because
 `arch/x86/realmode/rm/Makefile` compiles 16-bit setup code with its own
 `REALMODE_CFLAGS`, which (unlike the main build flags) never forces
 `-std=gnu11` — a gap only fixed in later kernel trees. Since GCC 15 defaults
@@ -152,19 +156,28 @@ to `-std=gnu23`, where `bool`/`true`/`false` are reserved keywords, that code
 fails to compile. Set `CC` in the environment to override the auto-detected
 compiler.
 
-### Legacy frozen config
+### Historical frozen config
 
-`configs/linux-v6.6.14.config` is a previously hand-edited, full `.config`
-kept for reference/fallback. Pass it explicitly to use it instead of the
-generator:
-
-```bash
-qemu/build-kernel.sh configs/linux-v6.6.14.config
-```
+`configs/linux-v6.6.14.config` is the previously hand-edited full `.config`
+from the old kernel target, kept for historical reference only. It is not
+used by or suitable as the configuration source for the v6.2.16 build.
 
 ## Run
 
-Provide an initramfs at `build/initramfs.cpio.gz` (e.g. busybox-based), then:
+Build a BusyBox initramfs containing the PoC and an unprivileged shell in the
+same separate output directory:
+
+```bash
+qemu/build-initramfs.sh
+```
+
+This requires a statically linked BusyBox, `cpio`, and the already-built
+`poc/CVE-2024-1086/exploit` binary. If BusyBox is not on `PATH`, set
+`BUSYBOX=/path/to/busybox`. The exploit is copied into the image but is **not**
+run automatically. Once booted, run `/home/nobody/exploit` manually from the
+unprivileged shell; it may panic the guest kernel.
+
+Then launch the matching kernel and initramfs:
 
 ```bash
 qemu/run-vm.sh

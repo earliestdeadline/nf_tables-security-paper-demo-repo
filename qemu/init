@@ -1,0 +1,23 @@
+#!/bin/sh
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mkdir -p /dev/pts /home/nobody /tmp
+mount -t devpts devpts /dev/pts
+chmod 1777 /tmp
+chown nobody:nobody /home/nobody
+[ -e /dev/console ] || mknod -m 600 /dev/console c 5 1
+[ -e /dev/ttyS0 ] || mknod -m 600 /dev/ttyS0 c 4 64
+
+echo
+echo "CVE-2024-1086 lab environment"
+echo "Logged in as an unprivileged user. Run /home/nobody/exploit manually."
+echo "The PoC may panic the guest kernel."
+echo
+
+while true; do
+  setsid cttyhack su -l -s /bin/sh nobody
+  echo "Shell exited; starting a new unprivileged shell."
+done

@@ -6,7 +6,7 @@
 # Usage: configs/verify-config.sh [path-to-.config]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CONFIG="${1:-$ROOT/build/.config}"
+CONFIG="${1:-$ROOT/build-6.2.16/.config}"
 
 if [ ! -r "$CONFIG" ]; then
   echo "error: config file not found: $CONFIG" >&2
@@ -18,6 +18,7 @@ declare -A REQUIRED=(
   [CONFIG_64BIT]="CONFIG_64BIT=y"
   [CONFIG_X86_64]="CONFIG_X86_64=y"
   [CONFIG_NF_TABLES]="CONFIG_NF_TABLES=y"
+  [CONFIG_NF_TABLES_IPV4]="CONFIG_NF_TABLES_IPV4=y"
   [CONFIG_NETFILTER_NETLINK]="CONFIG_NETFILTER_NETLINK=y"
   [CONFIG_USER_NS]="CONFIG_USER_NS=y"
   [CONFIG_NET_NS]="CONFIG_NET_NS=y"

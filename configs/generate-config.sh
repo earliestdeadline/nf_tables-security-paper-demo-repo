@@ -10,8 +10,11 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LINUX_DIR="$ROOT/linux"
-BUILD_DIR="${1:-$ROOT/build}"
+BUILD_DIR="${1:-$ROOT/build-6.2.16}"
 FRAGMENT="$ROOT/configs/nf_tables-repro.fragment"
+if [[ "$BUILD_DIR" != /* ]]; then
+  BUILD_DIR="$ROOT/$BUILD_DIR"
+fi
 
 mkdir -p "$BUILD_DIR"
 

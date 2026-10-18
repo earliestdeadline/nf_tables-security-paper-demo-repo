@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # Build the pinned kernel out-of-tree.
 #
-# By default, generates build/.config from scratch via
+# By default, generates the build directory's .config from scratch via
 # configs/generate-config.sh (stock x86_64_defconfig + the documented
-# fragment in configs/nf_tables-repro.fragment). Pass an explicit
-# config-file argument (e.g. the legacy tracked configs/linux-v6.6.14.config)
-# to use a frozen .config instead.
+# fragment in configs/nf_tables-repro.fragment). Set BUILD_DIR to keep
+# separate kernel versions' generated files apart. Pass an explicit config
+# file only when intentionally using a frozen config.
 #
 # Usage: qemu/build-kernel.sh [config-file]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD_DIR="$ROOT/build"
+BUILD_DIR="${BUILD_DIR:-$ROOT/build-6.2.16}"
+if [[ "$BUILD_DIR" != /* ]]; then
+  BUILD_DIR="$ROOT/$BUILD_DIR"
+fi
 
 mkdir -p "$BUILD_DIR"
 

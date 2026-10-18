@@ -15,6 +15,7 @@
 # where that sysctl exists). On kernels newer than v6.4, heap-init hardening
 # defeats the UAF/double-free the PoC relies on.
 
+CONFIG_NF_TABLES_IPV4=y
 CONFIG_NF_TABLES=y
 CONFIG_NETFILTER_NETLINK=y
 CONFIG_USER_NS=y

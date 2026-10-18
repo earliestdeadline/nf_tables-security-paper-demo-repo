@@ -1,4 +1,4 @@
-# Sourced helper: picks a C compiler compatible with building this (v6.6)
+# Sourced helper: picks a C compiler compatible with building this
 # kernel tree. GCC >= 15 defaults to -std=gnu23, under which 'bool', 'true'
 # and 'false' become reserved keywords. The main kernel build flags add
 # -std=gnu11 to compensate, but arch/x86/realmode/rm/Makefile builds 16-bit
