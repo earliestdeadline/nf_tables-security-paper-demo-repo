@@ -1,0 +1,6 @@
+build/
+*.img
+*.qcow2
+*.cpio
+*.cpio.gz
+*.o
